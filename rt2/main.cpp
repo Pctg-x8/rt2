@@ -1,14 +1,31 @@
 #include <iostream>
 #include <cstdint>
+#include <vector>
+#include <climits>
 
 #include <Windows.h>
+#include <mmsystem.h>
+
+#undef max
 
 #include "MathExt.h"
+#include "Objects.h"
+
+#pragma comment(lib, "winmm")
+
+namespace SceneInfo
+{
+	std::vector<IObjectBase*> SceneObjects;
+
+	void init();
+}
 
 namespace FrameInfo
 {
 	const std::uint32_t width = 960;
 	const std::uint32_t height = 540;
+
+	const double hfov = 60.0;
 
 	HBITMAP hBuffer = nullptr, hReservedBitmap;
 	HDC hRenderContext = nullptr;
@@ -29,9 +46,18 @@ int main(int argc, char** argv)
 	
 	std::cout << "Raytracer 2" << std::endl;
 	std::cout << "Render Frame Size:(" << FrameInfo::width << ", " << FrameInfo::height << ")" << std::endl;
+	SceneInfo::init();
 	FrameInfo::render();
 	Window::show();
 	return 0;
+}
+
+void SceneInfo::init()
+{
+	SceneInfo::SceneObjects.clear();
+	SceneInfo::SceneObjects.push_back(new Sphere(make4(0.0, 0.0, 5.0, 1.0), make4(1.0, 0.0, 0.0, 1.0), 1.0));
+	SceneInfo::SceneObjects.push_back(new Sphere(make4(0.5, 0.0, 6.0, 1.0), make4(0.0, 1.0, 0.0, 1.0), 1.0));
+	SceneInfo::SceneObjects.push_back(new Sphere(make4(-1.0, 0.0, 4.0, 1.0), make4(0.0, 1.0, 1.0, 1.0), 1.0));
 }
 
 void FrameInfo::render()
@@ -46,12 +72,37 @@ void FrameInfo::render()
 	std::uint32_t* pColorBuffer = new std::uint32_t[FrameInfo::width * FrameInfo::height];
 	memset(pColorBuffer, 0, sizeof(std::uint32_t) * FrameInfo::width * FrameInfo::height);
 
+	double focalLength = 1 / tan(FrameInfo::hfov / 2.0);
+	std::cout << "focal length:" << focalLength << std::endl;
+	double4 focalPoint = make4(0.0, 0.0, focalLength, 1.0);
+	double aspectValue = double(FrameInfo::height) / double(FrameInfo::width);
+	std::cout << "aspect value:" << aspectValue << std::endl;
+	std::uint64_t startTime = timeGetTime();
+
+	// ‰œ‚És‚­‚Ù‚Çz‚ª‘å‚«‚­‚È‚é
+
 	for (double y = 0.0; y < FrameInfo::height; y++)
 	{
 		std::uint32_t* lineBuffer = pColorBuffer + std::uint32_t(((FrameInfo::height - 1) - y) * FrameInfo::width);
+#pragma omp parallel for
 		for (double x = 0.0; x < FrameInfo::width; x++)
 		{
-			double4 baseColor = double4(x / FrameInfo::width, y / FrameInfo::height, 0.0, 1.0);
+			double4 surfacePos = make4((x / FrameInfo::width) * 2.0 - 1.0, ((y / FrameInfo::height) * 2.0 - 1.0) * aspectValue, 0.0, 1.0);
+			double4 eyeVector = surfacePos - focalPoint;
+			//double4 baseColor = make4(surfacePos[0], surfacePos[1], surfacePos[2], 1.0) * 0.5 + 0.5;
+			double4 baseColor = make4<double>(0, 0, 0, 1);
+			Ray eyeRay(make3(focalPoint), normalize(make3(eyeVector)));
+
+			auto depth = std::numeric_limits<double>::max();
+			for (const auto& e : SceneInfo::SceneObjects)
+			{
+				auto hitInfo = e->hitTest(eyeRay);
+				if (hitInfo.hit && depth > hitInfo.hitRayPosition)
+				{
+					baseColor = e->getColor();
+					depth = hitInfo.hitRayPosition;
+				}
+			}
 
 			// writeback
 			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 0] = baseColor[2] * 255;
@@ -60,6 +111,7 @@ void FrameInfo::render()
 			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 3] = baseColor[3] * 255;
 		}
 	}
+	std::cout << "Render Time:" << (double(timeGetTime() - startTime) / 1000.0) << "s" << std::endl;
 
 	HDC hBaseContext = GetDC(nullptr);
 	FrameInfo::hRenderContext = CreateCompatibleDC(hBaseContext);
