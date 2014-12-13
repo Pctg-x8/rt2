@@ -32,6 +32,8 @@ namespace FrameInfo
 {
 	const std::uint32_t width = 960;
 	const std::uint32_t height = 540;
+	const std::uint32_t ambientSampleCount = 8;
+	const double ambientDistance = 2.0;
 
 	const double hfov = 90.0;
 
@@ -116,12 +118,12 @@ void FrameInfo::render()
 		pColorPixel4[3] = col.a;
 	};
 
-	std::array<double, 64> aoSampleDegA;
-	std::array<double, 64> aoSampleDegB;
+	std::array<double, FrameInfo::ambientSampleCount> aoSampleDegA;
+	std::array<double, FrameInfo::ambientSampleCount> aoSampleDegB;
 	std::random_device rd;
 	std::mt19937 randomizer(rd());
 	std::uniform_real_distribution<> distr(-179, 179);
-	for (std::uint32_t i = 0; i < 64; i++)
+	for (std::uint32_t i = 0; i < FrameInfo::ambientSampleCount; i++)
 	{
 		aoSampleDegA[i] = distr(randomizer);
 		aoSampleDegB[i] = distr(randomizer);
@@ -148,6 +150,7 @@ void FrameInfo::render()
 			bool hitted = false;
 			hitTestResult htinfo;
 			auto depth = std::numeric_limits<double>::max();
+			IObjectBase* hittedObject = nullptr;
 			for (const auto& e : SceneInfo::SceneObjects)
 			{
 				auto hitInfo = e->hitTest(eyeRay);
@@ -157,32 +160,35 @@ void FrameInfo::render()
 					//baseColor = hitInfo.normal * 0.5 + 0.5;
 					depth = hitInfo.hitRayPosition;
 					htinfo = hitInfo;
+					hittedObject = e;
 					hitted = true;
 				}
 			}
 			if (hitted)
 			{
 				// AO処理を軽く
-				// 法線を64方向に曲げて、どのくらいの数他のオブジェクトに当たるかを調べる
-				std::uint32_t htcount = 0;
-				for (std::uint32_t a = 0; a < 64; a++)
+				// 法線をいくつかの方向に曲げて、どのくらいの数他のオブジェクトに当たるかを調べる
+				double htcount = 0;
+				for (std::int32_t a = 0; a < FrameInfo::ambientSampleCount; a++)
 				{
-					auto vecSampleRay = htinfo.normal.rotX(aoSampleDegA[a]).rotZ(aoSampleDegB[a]);
+					auto vecSampleRay = htinfo.normal.rotX(/*aoSampleDegA[a]*/distr(randomizer)).rotZ(/*aoSampleDegB[a]*/distr(randomizer));
 					Ray sampleRay(eyeRay.Pos(htinfo.hitRayPosition), vecSampleRay);
 
 					bool hitted = false;
+					double distNearest = std::numeric_limits<double>::max();
 					for (const auto& e : SceneInfo::SceneObjects)
 					{
+						if (e == hittedObject) continue;
 						auto hitInfo = e->hitTest(sampleRay);
-						if (hitInfo.hit && hitInfo.hitRayPosition <= 1.0)
+						if (hitInfo.hit && hitInfo.hitRayPosition <= FrameInfo::ambientDistance && hitInfo.hitRayPosition < distNearest)
 						{
 							hitted = true;
-							break;
+							distNearest = hitInfo.hitRayPosition;
 						}
 					}
-					if (hitted) htcount++;
+					if (hitted) htcount += /*pow(1.0 - (distNearest / FrameInfo::ambientDistance), 2.0)*/1.0;
 				}
-				baseColor = baseColor * (1.0 - (double(htcount) / 64.0));
+				baseColor = baseColor * (1.0 - pow(double(htcount) / double(FrameInfo::ambientSampleCount), 2.0));
 			}
 
 			// writeback
