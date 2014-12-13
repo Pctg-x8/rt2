@@ -129,7 +129,7 @@ void FrameInfo::render()
 
 	for (double y = 0.0; y < FrameInfo::height; y++)
 	{
-		if (fmod(y, 32) == 0)
+		if (fmod(y, 4) == 0)
 		{
 			std::cout << std::setw(2) << int((y / double(FrameInfo::height)) * 100.0) << "% rendered(" << int(y) << "/" << FrameInfo::height << ")" << std::endl;
 		}
