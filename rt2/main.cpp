@@ -2,16 +2,24 @@
 #include <cstdint>
 #include <vector>
 #include <climits>
+#include <array>
+#include <random>
 
 #include <Windows.h>
 #include <mmsystem.h>
+#include <iomanip>
 
 #undef max
+#undef min
 
 #include "MathExt.h"
 #include "Objects.h"
 
 #pragma comment(lib, "winmm")
+
+template<typename BaseT> BaseT max(BaseT a, BaseT b){ return a > b ? a : b; }
+template<typename BaseT> BaseT min(BaseT a, BaseT b){ return a < b ? a : b; }
+template<typename BaseT> BaseT clamp(BaseT a, BaseT low, BaseT high){ return a < low ? low : (a > high ? high : a); }
 
 namespace SceneInfo
 {
@@ -25,7 +33,7 @@ namespace FrameInfo
 	const std::uint32_t width = 960;
 	const std::uint32_t height = 540;
 
-	const double hfov = 60.0;
+	const double hfov = 90.0;
 
 	HBITMAP hBuffer = nullptr, hReservedBitmap;
 	HDC hRenderContext = nullptr;
@@ -55,9 +63,18 @@ int main(int argc, char** argv)
 void SceneInfo::init()
 {
 	SceneInfo::SceneObjects.clear();
-	SceneInfo::SceneObjects.push_back(new Sphere(make4(0.0, 0.0, 5.0, 1.0), make4(1.0, 0.0, 0.0, 1.0), 1.0));
-	SceneInfo::SceneObjects.push_back(new Sphere(make4(0.5, 0.0, 6.0, 1.0), make4(0.0, 1.0, 0.0, 1.0), 1.0));
-	SceneInfo::SceneObjects.push_back(new Sphere(make4(-1.0, 0.0, 4.0, 1.0), make4(0.0, 1.0, 1.0, 1.0), 1.0));
+	SceneInfo::SceneObjects.push_back(new Plane(Vector4(0.0, 1.0, 0.0, 1.0), Vector4(1.0, 1.0, 1.0, 1.0), Vector4(0.0, -1.0, 0.0, 0.0)));
+	
+	// 十字架っぽいなにか
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 5.0, 1.0), Vector4(1.0, 1.0, 0.0, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(2.0, -2.0, 5.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 7.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(-2.0, -2.0, 5.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 3.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+
+	SceneInfo::SceneObjects.push_back(new Sphere(Vector4(0.0, 0.0, 5.0, 1.0), Vector4(1.0, 0.0, 0.0, 1.0), 1.0));
+	SceneInfo::SceneObjects.push_back(new Sphere(Vector4(0.5, 0.0, 6.0, 1.0), Vector4(0.0, 1.0, 0.0, 1.0), 1.0));
+	SceneInfo::SceneObjects.push_back(new Sphere(Vector4(-1.0, 0.0, 4.0, 1.0), Vector4(0.0, 1.0, 1.0, 1.0), 1.0));
 }
 
 void FrameInfo::render()
@@ -72,27 +89,64 @@ void FrameInfo::render()
 	std::uint32_t* pColorBuffer = new std::uint32_t[FrameInfo::width * FrameInfo::height];
 	memset(pColorBuffer, 0, sizeof(std::uint32_t) * FrameInfo::width * FrameInfo::height);
 
-	double focalLength = 1 / tan(FrameInfo::hfov / 2.0);
+	double focalLength = 1 / tan((FrameInfo::hfov / 2.0) * (M_PI / 180.0));
 	std::cout << "focal length:" << focalLength << std::endl;
-	double4 focalPoint = make4(0.0, 0.0, focalLength, 1.0);
+	Vector4 focalPoint = Vector4(0.0, 0.0, -focalLength, 1.0);
 	double aspectValue = double(FrameInfo::height) / double(FrameInfo::width);
 	std::cout << "aspect value:" << aspectValue << std::endl;
 	std::uint64_t startTime = timeGetTime();
 
 	// 奥に行くほどzが大きくなる
+	// 上がマイナス
+	static auto FetchPixel = [&](const Vector4& vTex)
+	{
+		auto x = clamp(vTex.x, 0.0f, FrameInfo::width - 1.0f);
+		auto y = clamp(vTex.y, 0.0f, FrameInfo::height - 1.0f);
+		auto pColorPixel4 = (std::uint8_t*)(pColorBuffer + std::uint32_t(x + y * FrameInfo::width));
+		return Vector4(pColorPixel4[2], pColorPixel4[1], pColorPixel4[0], pColorPixel4[3]);
+	};
+	static auto WritePixel = [&](const Vector4& vTex, const Vector4& col)
+	{
+		auto x = clamp(vTex.x, 0.0f, FrameInfo::width - 1.0f);
+		auto y = clamp(vTex.y, 0.0f, FrameInfo::height - 1.0f);
+		auto pColorPixel4 = (std::uint8_t*)(pColorBuffer + std::uint32_t(x + y * FrameInfo::width));
+		pColorPixel4[0] = col.b;
+		pColorPixel4[1] = col.g;
+		pColorPixel4[2] = col.r;
+		pColorPixel4[3] = col.a;
+	};
+
+	std::array<double, 64> aoSampleDegA;
+	std::array<double, 64> aoSampleDegB;
+	std::random_device rd;
+	std::mt19937 randomizer(rd());
+	std::uniform_real_distribution<> distr(-179, 179);
+	for (std::uint32_t i = 0; i < 64; i++)
+	{
+		aoSampleDegA[i] = distr(randomizer);
+		aoSampleDegB[i] = distr(randomizer);
+	}
 
 	for (double y = 0.0; y < FrameInfo::height; y++)
 	{
+		if (fmod(y, 32) == 0)
+		{
+			std::cout << std::setw(2) << int((y / double(FrameInfo::height)) * 100.0) << "% rendered(" << int(y) << "/" << FrameInfo::height << ")" << std::endl;
+		}
 		std::uint32_t* lineBuffer = pColorBuffer + std::uint32_t(((FrameInfo::height - 1) - y) * FrameInfo::width);
-#pragma omp parallel for
 		for (double x = 0.0; x < FrameInfo::width; x++)
 		{
-			double4 surfacePos = make4((x / FrameInfo::width) * 2.0 - 1.0, ((y / FrameInfo::height) * 2.0 - 1.0) * aspectValue, 0.0, 1.0);
-			double4 eyeVector = surfacePos - focalPoint;
-			//double4 baseColor = make4(surfacePos[0], surfacePos[1], surfacePos[2], 1.0) * 0.5 + 0.5;
-			double4 baseColor = make4<double>(0, 0, 0, 1);
-			Ray eyeRay(make3(focalPoint), normalize(make3(eyeVector)));
+			Vector4 surfacePos((x / FrameInfo::width) * 2.0 - 1.0, ((y / FrameInfo::height) * 2.0 - 1.0) * aspectValue, 0.0, 1.0);
+			Vector4 eyeVector = surfacePos - focalPoint;
+			eyeVector.w = 0;
+			//std::cout << surfacePos << " - " << focalPoint << " = " << eyeVector << std::endl;
+			//Vector4 baseColor = make4(surfacePos[0], surfacePos[1], surfacePos[2], 1.0) * 0.5 + 0.5;
+			Vector4 baseColor = Vector4(0, 0, 0, 1);
+			Ray eyeRay(focalPoint, eyeVector.normalize());
+			//std::cout << "eyeRay:" << eyeRay << std::endl;
 
+			bool hitted = false;
+			hitTestResult htinfo;
 			auto depth = std::numeric_limits<double>::max();
 			for (const auto& e : SceneInfo::SceneObjects)
 			{
@@ -100,17 +154,115 @@ void FrameInfo::render()
 				if (hitInfo.hit && depth > hitInfo.hitRayPosition)
 				{
 					baseColor = e->getColor();
+					//baseColor = hitInfo.normal * 0.5 + 0.5;
 					depth = hitInfo.hitRayPosition;
+					htinfo = hitInfo;
+					hitted = true;
 				}
+			}
+			if (hitted)
+			{
+				// AO処理を軽く
+				// 法線を64方向に曲げて、どのくらいの数他のオブジェクトに当たるかを調べる
+				std::uint32_t htcount = 0;
+				for (std::uint32_t a = 0; a < 64; a++)
+				{
+					auto vecSampleRay = htinfo.normal.rotX(aoSampleDegA[a]).rotZ(aoSampleDegB[a]);
+					Ray sampleRay(eyeRay.Pos(htinfo.hitRayPosition), vecSampleRay);
+
+					bool hitted = false;
+					for (const auto& e : SceneInfo::SceneObjects)
+					{
+						auto hitInfo = e->hitTest(sampleRay);
+						if (hitInfo.hit && hitInfo.hitRayPosition <= 1.0)
+						{
+							hitted = true;
+							break;
+						}
+					}
+					if (hitted) htcount++;
+				}
+				baseColor = baseColor * (1.0 - (double(htcount) / 64.0));
 			}
 
 			// writeback
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 0] = baseColor[2] * 255;
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 1] = baseColor[1] * 255;
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 2] = baseColor[0] * 255;
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 3] = baseColor[3] * 255;
+			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 0] = baseColor.b * 255;
+			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 1] = baseColor.g * 255;
+			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 2] = baseColor.r * 255;
+			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 3] = baseColor.a * 255;
 		}
 	}
+
+	/*
+	// FXAA Antialiasing(難しいのでちょっと途中)
+	std::cout << "postprocessing..." << std::endl;
+	static auto FxaaLuma = [](const Vector4& col)
+	{
+		return col.dot(Vector4(0.299, 0.587, 0.114, 0.0));
+	};
+	for (double y = 0.0; y < FrameInfo::height; y++)
+	{
+		for (double x = 0.0; x < FrameInfo::width; x++)
+		{
+			// 周囲の色データ
+			auto cCurrent = FetchPixel(Vector4(x, y, 0, 0));
+			auto cLeftTop1 = FetchPixel(Vector4(x - 1, y - 1, 0, 0));
+			auto cRightTop1 = FetchPixel(Vector4(x + 1, y - 1, 0, 0));
+			auto cLeftBottom1 = FetchPixel(Vector4(x - 1, y + 1, 0, 0));
+			auto cRightBottom1 = FetchPixel(Vector4(x + 1, y + 1, 0, 0));
+
+			// 周囲の輝度データ
+			auto lumLT = FxaaLuma(cCurrent * 0.5f + cLeftTop1 * 0.5f);
+			auto lumLB = FxaaLuma(cCurrent * 0.5f + cLeftBottom1 * 0.5f);
+			auto lumRT = FxaaLuma(cCurrent * 0.5f + cRightTop1 * 0.5f);
+			auto lumRB = FxaaLuma(cCurrent * 0.5f + cRightBottom1 * 0.5f);
+			auto lumC = FxaaLuma(cCurrent);
+
+			// 輝度の最大/最小を求める
+			auto lumMax = max(max(lumLT, lumLB), max(lumRT, lumRB));
+			auto lumMin = min(min(lumLT, lumLB), min(lumRT, lumRB));
+			auto lumMaxScaleClamped = max(0.05f, lumMax * 0.125f);
+
+			// 照度差
+			float lumDiff = max(lumMax, lumC) - min(lumMin, lumC);
+
+			// 変化を比較
+			if (lumDiff >= lumMaxScaleClamped)
+			{
+				// 変化が大きいのでAAを施す
+				
+				// 各方向の照度差
+				auto dirNE = lumLB - lumRT;
+				auto dirNW = lumRB - lumLT;
+
+				// 照度ベクトル(よくわからない)
+				Vector4 d1 = Vector4(dirNE + dirNW, dirNE - dirNW, 0.0, 0.0).normalize();
+				Vector4 d1Diff = d1 / (8.0 * min(abs(d1.x), abs(d1.y)));
+				Vector4 d2 = Vector4(clamp(d1Diff.x, -2.0f, 2.0f), clamp(d1Diff.y, -2.0f, 2.0f), 0.0f, 0.0f) * 2.0f;
+				
+				// 半分のとこを求める(d1と加算なし部分で求める)
+				auto cN1 = FetchPixel(Vector4(x - d1.x, y - d1.y, 0, 0));
+				auto cP1 = FetchPixel(Vector4(x + d1.x, y + d1.y, 0, 0));
+				cN1 = cCurrent * 0.5f + cN1 * 0.5f;
+				cP1 = cCurrent * 0.5f + cP1 * 0.5f;
+				auto cN2 = FetchPixel(Vector4(x - d2.x, y - d2.y, 0, 0));
+				auto cP2 = FetchPixel(Vector4(x + d2.x, y + d2.y, 0, 0));
+				auto cA = cN1 + cP1;
+				auto cB = (cN2 + cP2 + cA) * 0.25f;
+				auto gray = FxaaLuma(cB);
+				if (gray < lumMin || gray > lumMax)
+				{
+					// 半分にする
+					WritePixel(Vector4(x, y, 0, 0), cA * 0.5);
+				}
+				else
+				{
+					// そのまま
+					WritePixel(Vector4(x, y, 0, 0), cB);
+				}
+			}
+		}
+	}*/
 	std::cout << "Render Time:" << (double(timeGetTime() - startTime) / 1000.0) << "s" << std::endl;
 
 	HDC hBaseContext = GetDC(nullptr);

@@ -1,165 +1,163 @@
 #pragma once
 
 #include <cstdint>
-#include <cmath>
 #include <iostream>
+#include <xmmintrin.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
-template<typename ArrayT> struct Multivalue;
-template<typename BaseT, std::uint32_t ElemCount> class Multivalue<BaseT[ElemCount]>
+#define _property(f, fs)	__declspec(property(get = f, put = fs))
+
+class Vector4
 {
-	using This = Multivalue < BaseT[ElemCount] >;
-	BaseT values[ElemCount];
+	_declspec(align(16)) __m128 values;
 public:
-	using BaseType = BaseT;
-	enum{ Elems = ElemCount };
+	float __0() const
+	{
+		float v;
+		_MM_EXTRACT_FLOAT(v, values, 0);
+		return v;
+	}
+	float __1() const
+	{
+		float v;
+		_MM_EXTRACT_FLOAT(v, values, 1);
+		return v;
+	}
+	float __2() const
+	{
+		float v;
+		_MM_EXTRACT_FLOAT(v, values, 2);
+		return v;
+	}
+	float __3() const
+	{
+		float v;
+		_MM_EXTRACT_FLOAT(v, values, 3);
+		return v;
+	}
+	void __s0(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(0, 0, 0)); }
+	void __s1(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(1, 1, 0)); }
+	void __s2(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(2, 2, 0)); }
+	void __s3(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(3, 3, 0)); }
 
-	Multivalue(){ memset(values, 0, sizeof(BaseT) * ElemCount); }
-	Multivalue(const BaseT initValues[ElemCount])
-	{
-		memcpy(values, initValues, sizeof(BaseT) * ElemCount);
-	}
-	Multivalue(const This& t)
-	{
-		memcpy(values, t.values, sizeof(BaseT) * ElemCount);
-	}
-	Multivalue(const Multivalue<BaseT[ElemCount - 1]>& oldValue, BaseT addValue)
-	{
-#pragma omp parallel for
-		for (std::uint32_t e = 0; e < ElemCount - 1; e++) values[e] = oldValue[e];
-		values[ElemCount - 1] = addValue;
-	}
-	BaseT operator[](std::uint32_t index) const { return values[index]; }
-	void store(std::uint32_t index, BaseT value){ values[index] = value; }
-	BaseT length2() const
-	{
-		BaseT r2 = 0;
-#pragma omp parallel for reduction(+:r2)
-		for (std::uint32_t e = 0; e < ElemCount; e++) r2 += pow(values[e], 2.0);
-		return r2;
-	}
-	BaseT length() const { return pow(length2(), 0.5); }
+	_property(__0, __s0) float x, r;
+	_property(__1, __s1) float y, g;
+	_property(__2, __s2) float z, b;
+	_property(__3, __s3) float w, a;
 
-	This operator+(const This& b) const
+	Vector4(){ values = _mm_set1_ps(0.0f); }
+	Vector4(float v){ values = _mm_set1_ps(v); }
+	Vector4(float x, float y, float z, float w){ values = _mm_set_ps(w, z, y, x); }
+	Vector4(__m128 v)
 	{
-		This ret;
-#pragma omp parallel for
-		for (std::uint32_t e = 0; e < ElemCount; e++) ret.values[e] = values[e] + b[e];
-		return ret;
+		float v1, v2, v3, v4;
+		_MM_EXTRACT_FLOAT(v1, v, 0);
+		_MM_EXTRACT_FLOAT(v2, v, 1);
+		_MM_EXTRACT_FLOAT(v3, v, 2);
+		_MM_EXTRACT_FLOAT(v4, v, 3);
+		values = _mm_set_ps(v4, v3, v2, v1);
 	}
-	This operator+(BaseT scalar) const
+	Vector4(const Vector4& v)
 	{
-		This ret;
-#pragma omp parallel for
-		for (std::uint32_t e = 0; e < ElemCount; e++) ret.values[e] = values[e] + scalar;
-		return ret;
+		values = _mm_set_ps(v.w, v.z, v.y, v.x);
 	}
-	This operator-(const This& b) const
+
+	Vector4& operator=(const Vector4& v)
 	{
-		This ret;
-#pragma omp parallel for
-		for (std::uint32_t e = 0; e < ElemCount; e++) ret.values[e] = values[e] - b[e];
-		return ret;
-	}
-	This operator-(BaseT scalar) const
-	{
-		This ret;
-#pragma omp parallel for
-		for (std::uint32_t e = 0; e < ElemCount; e++) ret.values[e] = values[e] - scalar;
-		return ret;
-	}
-	This operator*(BaseT scalar) const
-	{
-		This ret;
-#pragma omp parallel for
-		for (std::uint32_t e = 0; e < ElemCount; e++) ret.values[e] = values[e] * scalar;
-		return ret;
-	}
-	This& operator=(const BaseT initValues[ElemCount])
-	{
-		memcpy(values, initValues, sizeof(BaseT) * ElemCount);
+		values = _mm_set_ps(v.w, v.z, v.y, v.x);
 		return *this;
 	}
 
-	friend std::ostream& operator<<(std::ostream& ost, const Multivalue<BaseT[ElemCount]>& pt)
+	Vector4 operator+(const Vector4& v4) const
 	{
-		ost << "(";
-		for (std::uint32_t e = 0; e < ElemCount; e++)
-		{
-			ost << pt[e];
-			if (e != ElemCount - 1) ost << ", "; else ost << ")";
-		}
+		return _mm_add_ps(values, v4.values);
+	}
+	Vector4 operator-(const Vector4& v4) const
+	{
+		return _mm_sub_ps(values, v4.values);
+	}
+	Vector4 operator*(const Vector4& v4) const
+	{
+		return _mm_mul_ps(values, v4.values);
+	}
+	Vector4 operator/(const Vector4& v4) const
+	{
+		return _mm_div_ps(values, v4.values);
+	}
+
+	float length2() const { return pow(x, 2.0f) + pow(y, 2.0f) + pow(z, 2.0f) + pow(w, 2.0f); }
+	float length() const { return sqrt(length2()); }
+	float dot(const Vector4& v) const
+	{
+		float vf;
+		_MM_EXTRACT_FLOAT(vf, _mm_dp_ps(values, v.values, 0xff), 0);
+		return vf;
+	}
+	Vector4 normalize() const
+	{
+		auto l = length();
+		if (l == 0) return Vector4();
+		return *this / l;
+	}
+	Vector4 perspective(const Vector4& p) const 
+	{
+		// q = this
+		auto scalar = p.dot(*this) / length2();
+		return *this * scalar;
+	}
+	Vector4 perpendicular(const Vector4& p) const 
+	{
+		// q = this
+		return p - perspective(p);
+	}
+	Vector4 rotX(float deg) const
+	{
+		auto rad = deg * (M_PI / 180.0);
+		return Vector4(x, y * cos(rad) - z * sin(rad), y * sin(rad) + z * cos(rad), w);
+	}
+	Vector4 rotY(float deg) const
+	{
+		auto rad = deg * (M_PI / 180.0);
+		return Vector4(x * cos(rad) + z * sin(rad), y, -x * sin(rad) + z * cos(rad), w);
+	}
+	Vector4 rotZ(float deg) const
+	{
+		auto rad = deg * (M_PI / 180.0);
+		return Vector4(x * cos(rad) - y * sin(rad), x * sin(rad) + y * cos(rad), z, w);
+	}
+
+	friend std::ostream& operator<<(std::ostream& ost, const Vector4& pt)
+	{
+		ost << "(" << pt.x << ", " << pt.y << ", " << pt.z << ", " << pt.w << ")";
 		return ost;
 	}
 };
 
-template<typename BaseT, std::uint32_t ElemCount> BaseT dot(const Multivalue<BaseT[ElemCount]>& e1, const Multivalue<BaseT[ElemCount]>& e2)
-{
-	BaseT r = 0;
-#pragma omp parallel for reduction(+:r)
-	for (std::uint32_t e = 0; e < ElemCount; e++) r += e1[e] * e2[e];
-	return r;
-}
-template<typename MultivalueT> MultivalueT normalize(const MultivalueT& v)
-{
-	MultivalueT mv;
-	double l = v.length();
-	if (l == 0) return mv;
-#pragma omp parallel for
-	for (std::uint32_t e = 0; e < MultivalueT::Elems; e++) mv.store(e, v[e] / l);
-	return mv;
-}
-template<typename MultivalueT> MultivalueT perspective(const MultivalueT& p, const MultivalueT& q)
-{
-	// pers_q(p) = (dot(p, q)/||q||^2)*q
-	return q * (dot(p, q) / q.length2());
-}
-template<typename MultivalueT> MultivalueT perpendicular(const MultivalueT& p, const MultivalueT& q)
-{
-	// perp_q(p) = p - pers_q(p)
-	return p - perspective(p, q);
-}
-
-template<typename BaseT> Multivalue<BaseT[4]> make4(BaseT v1, BaseT v2, BaseT v3, BaseT v4)
-{
-	return Multivalue<BaseT[4]>(new BaseT[4]{ v1, v2, v3, v4 });
-}
-template<typename BaseT> Multivalue<BaseT[3]> make3(BaseT v1, BaseT v2, BaseT v3)
-{
-	return Multivalue<BaseT[3]>(new BaseT[3]{ v1, v2, v3 });
-}
-template<typename BaseT> Multivalue<BaseT[3]> make3(const Multivalue<BaseT[4]>& oldValue)
-{
-	return Multivalue<BaseT[3]>(new BaseT[3]{ oldValue[0], oldValue[1], oldValue[2] });
-}
-
-using double4 = Multivalue<double[4]>;
-using double3 = Multivalue<double[3]>;
-using double2 = Multivalue<double[2]>;
-
 class Ray
 {
-	double4 startPos;
-	double4 Direction;
+	Vector4 startPos;
+	Vector4 Direction;
 public:
-	Ray(const double3& s, const double3& d) : startPos(s, 1.0), Direction(d, 0.0){}
+	Ray(const Vector4& s, const Vector4& d) : startPos(s), Direction(d){}
 
-	auto getStartPos() -> decltype(startPos) const { return startPos; }
-	auto getDirection() -> decltype(Direction) const { return Direction; }
-	double4 relativePoint(const double4& dp) const { return dp - startPos; }
-	double nearestPointDistance(const double4& dp) const
+	Vector4 getStartPos() const { return startPos; }
+	Vector4 getDirection() const { return Direction; }
+	Vector4 relativePoint(const Vector4& dp) const { return dp - startPos; }
+	double nearestPointDistance(const Vector4& dp) const
 	{
 		auto rp = this->relativePoint(dp);
-		if (dot(this->Direction, rp) < 0) return -1;
-		auto p = perpendicular(rp, this->Direction);
+		if (this->Direction.dot(rp) < 0) return -1;
+		auto p = this->Direction.perpendicular(rp);
 		return p.length();
 	}
-	double nearestPointOffset(const double4& dp) const
+	double nearestPointOffset(const Vector4& dp) const
 	{
 		auto rp = this->relativePoint(dp);
-		if (dot(this->Direction, rp) < 0) return -1;
-		return perspective(rp, this->Direction).length();
+		if (this->Direction.dot(rp) < 0) return -1;
+		return this->Direction.perspective(rp).length();
 	}
-	double4 Pos(double offs) const { return startPos + Direction * offs; }
+	Vector4 Pos(float offs) const { return startPos + Direction * offs; }
 
 	friend std::ostream& operator<<(std::ostream& ost, const Ray& r)
 	{
