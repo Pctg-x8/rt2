@@ -14,12 +14,10 @@
 
 #include "MathExt.h"
 #include "Objects.h"
+#include "ColorBuffer.h"
 
 #pragma comment(lib, "winmm")
-
-template<typename BaseT> BaseT max(BaseT a, BaseT b){ return a > b ? a : b; }
-template<typename BaseT> BaseT min(BaseT a, BaseT b){ return a < b ? a : b; }
-template<typename BaseT> BaseT clamp(BaseT a, BaseT low, BaseT high){ return a < low ? low : (a > high ? high : a); }
+#pragma comment(lib, "libpng16")
 
 namespace SceneInfo
 {
@@ -32,10 +30,13 @@ namespace FrameInfo
 {
 	const std::uint32_t width = 960;
 	const std::uint32_t height = 540;
+	const int ambientCalcCount = 1;
 	const std::uint32_t ambientSampleCount = 8;
-	const double ambientDistance = 2.0;
+	const double ambientDistance = 1.0;
 
 	const double hfov = 90.0;
+
+	ColorBuffer final_buffer;
 
 	HBITMAP hBuffer = nullptr, hReservedBitmap;
 	HDC hRenderContext = nullptr;
@@ -49,6 +50,8 @@ namespace Window
 	void show();
 	LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 }
+
+Vector4 CalcateAmbient(const hitTestResult& htres, const Ray& ray, IObjectBase* processingObjectFrom, const int StepCounter);
 
 int main(int argc, char** argv)
 {
@@ -65,14 +68,18 @@ int main(int argc, char** argv)
 void SceneInfo::init()
 {
 	SceneInfo::SceneObjects.clear();
-	SceneInfo::SceneObjects.push_back(new Plane(Vector4(0.0, 1.0, 0.0, 1.0), Vector4(1.0, 1.0, 1.0, 1.0), Vector4(0.0, -1.0, 0.0, 0.0)));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, 2.5, 5.0, 1.0), Vector4(1.0, 1.0, 1.0, 1.0), Vector4(0.0, -1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0), 2.5, 2.5));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(2.5, 0.0, 5.0, 1.0), Vector4(1.0, 0.0, 0.0, 1.0), Vector4(-1.0, 0.0, 0.0, 0.0), Vector4(0.0, 1.0, 0.0), 2.5, 2.5));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(-2.5, 0.0, 5.0, 1.0), Vector4(0.0, 1.0, 0.0, 1.0), Vector4(1.0, 0.0, 0.0, 0.0), Vector4(0.0, 1.0, 0.0), 2.5, 2.5));
+	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0, 0.0, 7.5, 1.0), Vector4(0.0, 0.0, 1.0, 1.0), Vector4(0.0, 0.0, -1.0, 0.0), Vector4(0.0, 1.0, 0.0), 2.5, 2.5));
+	SceneInfo::SceneObjects.push_back(new Plane(Vector4(0.0, -2.5, 5.0, 1.0), Vector4(1.0, 1.0, 1.0, 1.0), Vector4(0.0, 1.0, 0.0, 0.0)));
 	
 	// 十字架っぽいなにか
-	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 5.0, 1.0), Vector4(1.0, 1.0, 0.0, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
-	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(2.0, -2.0, 5.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
-	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 7.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
-	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(-2.0, -2.0, 5.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
-	SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 3.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	//SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 5.0, 1.0), Vector4(1.0, 1.0, 0.0, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	//SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(4.0, -2.0, 5.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	//SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 9.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	//SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(-4.0, -2.0, 5.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
+	//SceneInfo::SceneObjects.push_back(new ParametricPlane(Vector4(0.0, -2.0, 1.0, 1.0), Vector4(1.0, 0.5, 0.5, 1.0), Vector4(0.0, 1.0, 0.0, 0.0), Vector4(1.0, 0.0, 0.0, 0.0), 2.0, 2.0));
 
 	SceneInfo::SceneObjects.push_back(new Sphere(Vector4(0.0, 0.0, 5.0, 1.0), Vector4(1.0, 0.0, 0.0, 1.0), 1.0));
 	SceneInfo::SceneObjects.push_back(new Sphere(Vector4(0.5, 0.0, 6.0, 1.0), Vector4(0.0, 1.0, 0.0, 1.0), 1.0));
@@ -88,8 +95,11 @@ void FrameInfo::render()
 		DeleteDC(hRenderContext);
 	}
 
-	std::uint32_t* pColorBuffer = new std::uint32_t[FrameInfo::width * FrameInfo::height];
-	memset(pColorBuffer, 0, sizeof(std::uint32_t) * FrameInfo::width * FrameInfo::height);
+	ColorBuffer diffuseBuffer(FrameInfo::width, FrameInfo::height);
+	ColorBuffer aoFactorBuffer(FrameInfo::width, FrameInfo::height);
+	ColorBuffer depthBuffer(FrameInfo::width, FrameInfo::height);
+	ColorBuffer normalBuffer(FrameInfo::width, FrameInfo::height);
+	FrameInfo::final_buffer.init(FrameInfo::width, FrameInfo::height);
 
 	double focalLength = 1 / tan((FrameInfo::hfov / 2.0) * (M_PI / 180.0));
 	std::cout << "focal length:" << focalLength << std::endl;
@@ -100,23 +110,6 @@ void FrameInfo::render()
 
 	// 奥に行くほどzが大きくなる
 	// 上がマイナス
-	static auto FetchPixel = [&](const Vector4& vTex)
-	{
-		auto x = clamp(vTex.x, 0.0f, FrameInfo::width - 1.0f);
-		auto y = clamp(vTex.y, 0.0f, FrameInfo::height - 1.0f);
-		auto pColorPixel4 = (std::uint8_t*)(pColorBuffer + std::uint32_t(x + y * FrameInfo::width));
-		return Vector4(pColorPixel4[2], pColorPixel4[1], pColorPixel4[0], pColorPixel4[3]);
-	};
-	static auto WritePixel = [&](const Vector4& vTex, const Vector4& col)
-	{
-		auto x = clamp(vTex.x, 0.0f, FrameInfo::width - 1.0f);
-		auto y = clamp(vTex.y, 0.0f, FrameInfo::height - 1.0f);
-		auto pColorPixel4 = (std::uint8_t*)(pColorBuffer + std::uint32_t(x + y * FrameInfo::width));
-		pColorPixel4[0] = col.b;
-		pColorPixel4[1] = col.g;
-		pColorPixel4[2] = col.r;
-		pColorPixel4[3] = col.a;
-	};
 
 	std::array<double, FrameInfo::ambientSampleCount> aoSampleDegA;
 	std::array<double, FrameInfo::ambientSampleCount> aoSampleDegB;
@@ -133,11 +126,13 @@ void FrameInfo::render()
 	{
 		if (fmod(y, 4) == 0)
 		{
-			std::cout << std::setw(2) << int((y / double(FrameInfo::height)) * 100.0) << "% rendered(" << int(y) << "/" << FrameInfo::height << ")" << std::endl;
+			std::cout << std::setw(2) << std::setfill('0') << int((y / double(FrameInfo::height)) * 100.0) << "% rendered(" << int(y) << "/" << FrameInfo::height << ") ";
+			std::cout << std::endl;
 		}
-		std::uint32_t* lineBuffer = pColorBuffer + std::uint32_t(((FrameInfo::height - 1) - y) * FrameInfo::width);
-		for (double x = 0.0; x < FrameInfo::width; x++)
+#pragma omp parallel for
+		for (int _x = 0; _x < FrameInfo::width; _x++)
 		{
+			double x = double(_x);
 			Vector4 surfacePos((x / FrameInfo::width) * 2.0 - 1.0, ((y / FrameInfo::height) * 2.0 - 1.0) * aspectValue, 0.0, 1.0);
 			Vector4 eyeVector = surfacePos - focalPoint;
 			eyeVector.w = 0;
@@ -166,130 +161,40 @@ void FrameInfo::render()
 			}
 			if (hitted)
 			{
-				// AO処理を軽く
-				// 法線をいくつかの方向に曲げて、どのくらいの数他のオブジェクトに当たるかを調べる
-				double htcount = 0;
-				for (std::int32_t a = 0; a < FrameInfo::ambientSampleCount; a++)
-				{
-					auto vecSampleRay = htinfo.normal.rotX(/*aoSampleDegA[a]*/distr(randomizer)).rotZ(/*aoSampleDegB[a]*/distr(randomizer));
-					Ray sampleRay(eyeRay.Pos(htinfo.hitRayPosition), vecSampleRay);
+				diffuseBuffer.set(Vector4(x, y), hittedObject->getColor());
+				normalBuffer.set(Vector4(x, y), (htinfo.normal + 1.0f) * 0.5f);
+				depthBuffer.set(Vector4(x, y), (eyeRay.Pos(htinfo.hitRayPosition) + htinfo.normal * std::numeric_limits<float>::epsilon()).z / 15.0f);
 
-					bool hitted = false;
-					double distNearest = std::numeric_limits<double>::max();
-					for (const auto& e : SceneInfo::SceneObjects)
-					{
-						if (e == hittedObject) continue;
-						auto hitInfo = e->hitTest(sampleRay);
-						if (hitInfo.hit && hitInfo.hitRayPosition <= FrameInfo::ambientDistance && hitInfo.hitRayPosition < distNearest)
-						{
-							hitted = true;
-							distNearest = hitInfo.hitRayPosition;
-						}
-					}
-					if (hitted) htcount += /*pow(1.0 - (distNearest / FrameInfo::ambientDistance), 2.0)*/1.0;
-				}
-				baseColor = baseColor * (1.0 - pow(double(htcount) / double(FrameInfo::ambientSampleCount), 2.0));
+				auto ao = CalcateAmbient(htinfo, eyeRay, hittedObject, FrameInfo::ambientCalcCount);
+				aoFactorBuffer.set(Vector4(x, y), ao);
+				baseColor = baseColor * ao;
 			}
-
-			// writeback
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 0] = baseColor.b * 255;
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 1] = baseColor.g * 255;
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 2] = baseColor.r * 255;
-			((std::uint8_t*)lineBuffer)[std::uint32_t(x) * 4 + 3] = baseColor.a * 255;
+			FrameInfo::final_buffer.set(Vector4(x, y, 0, 0), baseColor);
 		}
 	}
 
-	/*
-	// FXAA Antialiasing(難しいのでちょっと途中)
+	// FXAA Antialiasing
 	std::cout << "postprocessing..." << std::endl;
-	static auto FxaaLuma = [](const Vector4& col)
-	{
-		return col.dot(Vector4(0.299, 0.587, 0.114, 0.0));
-	};
-	for (double y = 0.0; y < FrameInfo::height; y++)
-	{
-		for (double x = 0.0; x < FrameInfo::width; x++)
-		{
-			// 周囲の色データ
-			auto cCurrent = FetchPixel(Vector4(x, y, 0, 0));
-			auto cLeftTop1 = FetchPixel(Vector4(x - 1, y - 1, 0, 0));
-			auto cRightTop1 = FetchPixel(Vector4(x + 1, y - 1, 0, 0));
-			auto cLeftBottom1 = FetchPixel(Vector4(x - 1, y + 1, 0, 0));
-			auto cRightBottom1 = FetchPixel(Vector4(x + 1, y + 1, 0, 0));
-
-			// 周囲の輝度データ
-			auto lumLT = FxaaLuma(cCurrent * 0.5f + cLeftTop1 * 0.5f);
-			auto lumLB = FxaaLuma(cCurrent * 0.5f + cLeftBottom1 * 0.5f);
-			auto lumRT = FxaaLuma(cCurrent * 0.5f + cRightTop1 * 0.5f);
-			auto lumRB = FxaaLuma(cCurrent * 0.5f + cRightBottom1 * 0.5f);
-			auto lumC = FxaaLuma(cCurrent);
-
-			// 輝度の最大/最小を求める
-			auto lumMax = max(max(lumLT, lumLB), max(lumRT, lumRB));
-			auto lumMin = min(min(lumLT, lumLB), min(lumRT, lumRB));
-			auto lumMaxScaleClamped = max(0.05f, lumMax * 0.125f);
-
-			// 照度差
-			float lumDiff = max(lumMax, lumC) - min(lumMin, lumC);
-
-			// 変化を比較
-			if (lumDiff >= lumMaxScaleClamped)
-			{
-				// 変化が大きいのでAAを施す
-				
-				// 各方向の照度差
-				auto dirNE = lumLB - lumRT;
-				auto dirNW = lumRB - lumLT;
-
-				// 照度ベクトル(よくわからない)
-				Vector4 d1 = Vector4(dirNE + dirNW, dirNE - dirNW, 0.0, 0.0).normalize();
-				Vector4 d1Diff = d1 / (8.0 * min(abs(d1.x), abs(d1.y)));
-				Vector4 d2 = Vector4(clamp(d1Diff.x, -2.0f, 2.0f), clamp(d1Diff.y, -2.0f, 2.0f), 0.0f, 0.0f) * 2.0f;
-				
-				// 半分のとこを求める(d1と加算なし部分で求める)
-				auto cN1 = FetchPixel(Vector4(x - d1.x, y - d1.y, 0, 0));
-				auto cP1 = FetchPixel(Vector4(x + d1.x, y + d1.y, 0, 0));
-				cN1 = cCurrent * 0.5f + cN1 * 0.5f;
-				cP1 = cCurrent * 0.5f + cP1 * 0.5f;
-				auto cN2 = FetchPixel(Vector4(x - d2.x, y - d2.y, 0, 0));
-				auto cP2 = FetchPixel(Vector4(x + d2.x, y + d2.y, 0, 0));
-				auto cA = cN1 + cP1;
-				auto cB = (cN2 + cP2 + cA) * 0.25f;
-				auto gray = FxaaLuma(cB);
-				if (gray < lumMin || gray > lumMax)
-				{
-					// 半分にする
-					WritePixel(Vector4(x, y, 0, 0), cA * 0.5);
-				}
-				else
-				{
-					// そのまま
-					WritePixel(Vector4(x, y, 0, 0), cB);
-				}
-			}
-		}
-	}*/
+	diffuseBuffer.fxaa();
+	normalBuffer.fxaa();
+	depthBuffer.fxaa();
+	aoFactorBuffer.fxaa();
+	FrameInfo::final_buffer.fxaa();
 	std::cout << "Render Time:" << (double(timeGetTime() - startTime) / 1000.0) << "s" << std::endl;
+
+	std::cout << "Writing results..." << std::endl;
+	diffuseBuffer.ExportPortableNetworkGraph(L"diffuse.png");
+	normalBuffer.ExportPortableNetworkGraph(L"normal.png");
+	depthBuffer.ExportPortableNetworkGraph(L"depth.png");
+	aoFactorBuffer.ExportPortableNetworkGraph(L"ao_factor.png");
+	FrameInfo::final_buffer.ExportPortableNetworkGraph(L"final.png");
 
 	HDC hBaseContext = GetDC(nullptr);
 	FrameInfo::hRenderContext = CreateCompatibleDC(hBaseContext);
-	BITMAPINFO bi = {};
-	bi.bmiHeader.biSize = sizeof bi.bmiHeader;
-	bi.bmiHeader.biBitCount = 32;
-	bi.bmiHeader.biHeight = FrameInfo::height;
-	bi.bmiHeader.biWidth = FrameInfo::width;
-	bi.bmiHeader.biPlanes = 1;
-	bi.bmiHeader.biCompression = BI_RGB;
-	hBuffer = CreateDIBitmap(hBaseContext, &bi.bmiHeader, CBM_INIT, pColorBuffer, &bi, DIB_RGB_COLORS);
-	if (!hBuffer)
-	{
-		std::cout << "error creating buffer object" << std::endl;
-		exit(-2);
-	}
+	FrameInfo::hBuffer = FrameInfo::final_buffer.CreateBitmap(hBaseContext);
 	hReservedBitmap = HBITMAP(SelectObject(hRenderContext, hBuffer));
 
 	ReleaseDC(nullptr, hBaseContext);
-	delete[] pColorBuffer;
 }
 
 void Window::show()
@@ -358,4 +263,97 @@ LRESULT CALLBACK Window::WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	}
 
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
+}
+
+Vector4 CalcateAmbient(const hitTestResult& htres, const Ray& ray, IObjectBase* processingObjectFrom, const int StepCounter)
+{
+	// rayと衝突したprocessingObjectFromの衝突点(表面、衝突情報htres)のアンビエント光を計算
+
+	if (typeid(*processingObjectFrom) != typeid(Plane))
+	{
+		// 法線から接空間行列を求める(orthoBasis)
+		std::array<Vector4, 3> basis;
+		basis[2] = Vector4(htres.normal.x, htres.normal.y, htres.normal.z, 0.0);
+
+		if ((htres.normal.x < 0.6) && (htres.normal.x > -0.6))
+		{
+			basis[1].x = 1.0;
+		}
+		else if ((htres.normal.y < 0.6) && (htres.normal.y > -0.6))
+		{
+			basis[1].y = 1.0;
+		}
+		else if ((htres.normal.z < 0.6) && (htres.normal.z > -0.6))
+		{
+			basis[1].z = 1.0;
+		}
+		else basis[1].x = 1.0;
+
+		basis[0] = basis[1].cross3(basis[2]).normalize();
+		basis[1] = basis[2].cross3(basis[0]).normalize();
+
+		// AO処理を軽く
+		//double htcount = 0;
+		Vector4 ambient;
+
+		std::random_device rd;
+		std::mt19937 randomizer(rd());
+		static std::uniform_real_distribution<> distr_norm(0.0, 1.0);
+		static std::uniform_real_distribution<> distr_phi(0.0, 2.0 * M_PI);
+		// 半球積分
+		for (std::int32_t phi_d = 0; phi_d < FrameInfo::ambientSampleCount; phi_d++)
+		{
+			for (std::int32_t theta_d = 0; theta_d < FrameInfo::ambientSampleCount; theta_d++)
+			{
+				auto r = sqrt(distr_norm(randomizer));
+				auto phi = distr_phi(randomizer);
+
+				auto localVector = Vector4(cos(phi) * r, sin(phi) * r, sqrt(1.0 - pow(r, 2.0)), 0.0);
+				auto vecSampleRay = Vector4();
+				vecSampleRay.x = localVector.x * basis[0].x + localVector.y * basis[1].x + localVector.z * basis[2].x;
+				vecSampleRay.y = localVector.x * basis[0].y + localVector.y * basis[1].y + localVector.z * basis[2].y;
+				vecSampleRay.z = localVector.x * basis[0].z + localVector.y * basis[1].z + localVector.z * basis[2].z;
+				Ray sampleRay(ray.Pos(htres.hitRayPosition) + htres.normal * std::numeric_limits<double>::epsilon(), vecSampleRay);
+
+				bool hitted = false;
+				IObjectBase* pHittedAmbientObject = nullptr;
+				double distNearest = std::numeric_limits<double>::max();
+				hitTestResult hti;
+				for (const auto& e : SceneInfo::SceneObjects)
+				{
+					if (e == processingObjectFrom) continue;
+					auto hitInfo = e->hitTest(sampleRay);
+					if (hitInfo.hit && hitInfo.hitRayPosition < distNearest)
+					{
+						hti = hitInfo;
+						hitted = true;
+						distNearest = hitInfo.hitRayPosition;
+						pHittedAmbientObject = e;
+					}
+				}
+				if (hitted)
+				{
+					if (StepCounter > 0)
+					{
+						// まだ計算するべきであるなら、衝突した環境オブジェクトから新たに行う
+						ambient = ambient + CalcateAmbient(hti, sampleRay, pHittedAmbientObject, StepCounter - 1) * max(1.0 - sqrt(distNearest / 16.0), 0.0);
+					}
+					else
+					{
+						if (typeid(*pHittedAmbientObject) == typeid(Plane))
+						{
+							// plane(illuminating)
+							ambient = ambient + pHittedAmbientObject->getColor() * max(1.0 - sqrt(distNearest / 16.0), 0.0);
+						}
+					}
+				}
+			}
+		}
+		return ambient / float(FrameInfo::ambientSampleCount * FrameInfo::ambientSampleCount);
+	}
+	else
+	{
+		// Planeは発光体だから自身の色
+		return processingObjectFrom->getColor();
+	}
 }

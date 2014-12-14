@@ -2,88 +2,97 @@
 
 #include <cstdint>
 #include <iostream>
-#include <xmmintrin.h>
+#include <emmintrin.h>
 #define _USE_MATH_DEFINES
 #include <math.h>
 
 #define _property(f, fs)	__declspec(property(get = f, put = fs))
 
+template<typename BaseT> BaseT max(BaseT a, BaseT b){ return a > b ? a : b; }
+template<typename BaseT> BaseT min(BaseT a, BaseT b){ return a < b ? a : b; }
+template<typename BaseT> BaseT clamp(BaseT a, BaseT low, BaseT high){ return a < low ? low : (a > high ? high : a); }
+
 class Vector4
 {
-	_declspec(align(16)) __m128 values;
 public:
-	float __0() const
-	{
-		float v;
-		_MM_EXTRACT_FLOAT(v, values, 0);
-		return v;
-	}
-	float __1() const
-	{
-		float v;
-		_MM_EXTRACT_FLOAT(v, values, 1);
-		return v;
-	}
-	float __2() const
-	{
-		float v;
-		_MM_EXTRACT_FLOAT(v, values, 2);
-		return v;
-	}
-	float __3() const
-	{
-		float v;
-		_MM_EXTRACT_FLOAT(v, values, 3);
-		return v;
-	}
-	void __s0(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(0, 0, 0)); }
-	void __s1(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(1, 1, 0)); }
-	void __s2(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(2, 2, 0)); }
-	void __s3(float v){ values = _mm_insert_ps(values, _mm_set1_ps(v), _MM_MK_INSERTPS_NDX(3, 3, 0)); }
+	union{ float x, r; };
+	union{ float y, g; };
+	union{ float z, b; };
+	union{ float w, a; };
 
-	_property(__0, __s0) float x, r;
-	_property(__1, __s1) float y, g;
-	_property(__2, __s2) float z, b;
-	_property(__3, __s3) float w, a;
+	Vector4 __00(){ return Vector4(x, x, 0, 0); }
+	Vector4 __01(){ return Vector4(x, y, 0, 0); }
+	Vector4 __02(){ return Vector4(x, z, 0, 0); }
+	Vector4 __03(){ return Vector4(x, w, 0, 0); }
+	Vector4 __10(){ return Vector4(y, x, 0, 0); }
+	Vector4 __11(){ return Vector4(y, y, 0, 0); }
+	Vector4 __12(){ return Vector4(y, z, 0, 0); }
+	Vector4 __13(){ return Vector4(y, w, 0, 0); }
+	Vector4 __20(){ return Vector4(z, x, 0, 0); }
+	Vector4 __21(){ return Vector4(z, y, 0, 0); }
+	Vector4 __22(){ return Vector4(z, z, 0, 0); }
+	Vector4 __23(){ return Vector4(z, w, 0, 0); }
+	Vector4 __30(){ return Vector4(w, x, 0, 0); }
+	Vector4 __31(){ return Vector4(w, y, 0, 0); }
+	Vector4 __32(){ return Vector4(w, z, 0, 0); }
+	Vector4 __33(){ return Vector4(w, w, 0, 0); }
 
-	Vector4(){ values = _mm_set1_ps(0.0f); }
-	Vector4(float v){ values = _mm_set1_ps(v); }
-	Vector4(float x, float y, float z, float w){ values = _mm_set_ps(w, z, y, x); }
+	_declspec(property(get = __00)) Vector4 xx, rr;
+	_declspec(property(get = __01)) Vector4 xy, rg;
+	_declspec(property(get = __02)) Vector4 xz, rb;
+	_declspec(property(get = __03)) Vector4 xw, ra;
+	_declspec(property(get = __10)) Vector4 yx, gr;
+	_declspec(property(get = __11)) Vector4 yy, gg;
+	_declspec(property(get = __12)) Vector4 yz, gb;
+	_declspec(property(get = __13)) Vector4 yw, ga;
+	_declspec(property(get = __20)) Vector4 zx, br;
+	_declspec(property(get = __21)) Vector4 zy, bg;
+	_declspec(property(get = __22)) Vector4 zz, bb;
+	_declspec(property(get = __23)) Vector4 zw, ba;
+	_declspec(property(get = __30)) Vector4 wx, ar;
+	_declspec(property(get = __31)) Vector4 wy, ag;
+	_declspec(property(get = __32)) Vector4 wz, ab;
+	_declspec(property(get = __33)) Vector4 ww, aa;
+
+	Vector4(){ x = y = z = w = 0.0f; }
+	Vector4(float v){ x = y = z = w = v; }
+	Vector4(float x, float y, float z = 0.0f, float w = 0.0f)
+	{
+		r = x; g = y; b = z; a = w;
+	}
 	Vector4(__m128 v)
 	{
-		float v1, v2, v3, v4;
-		_MM_EXTRACT_FLOAT(v1, v, 0);
-		_MM_EXTRACT_FLOAT(v2, v, 1);
-		_MM_EXTRACT_FLOAT(v3, v, 2);
-		_MM_EXTRACT_FLOAT(v4, v, 3);
-		values = _mm_set_ps(v4, v3, v2, v1);
+		_MM_EXTRACT_FLOAT(x, v, 0);
+		_MM_EXTRACT_FLOAT(y, v, 1);
+		_MM_EXTRACT_FLOAT(z, v, 2);
+		_MM_EXTRACT_FLOAT(w, v, 3);
 	}
 	Vector4(const Vector4& v)
 	{
-		values = _mm_set_ps(v.w, v.z, v.y, v.x);
+		x = v.x; y = v.y; z = v.z; w = v.w;
 	}
 
 	Vector4& operator=(const Vector4& v)
 	{
-		values = _mm_set_ps(v.w, v.z, v.y, v.x);
+		x = v.x; y = v.y; z = v.z; w = v.w;
 		return *this;
 	}
 
 	Vector4 operator+(const Vector4& v4) const
 	{
-		return _mm_add_ps(values, v4.values);
+		return _mm_add_ps(_mm_set_ps(w, z, y, x), _mm_set_ps(v4.w, v4.z, v4.y, v4.x));
 	}
 	Vector4 operator-(const Vector4& v4) const
 	{
-		return _mm_sub_ps(values, v4.values);
+		return _mm_sub_ps(_mm_set_ps(w, z, y, x), _mm_set_ps(v4.w, v4.z, v4.y, v4.x));
 	}
 	Vector4 operator*(const Vector4& v4) const
 	{
-		return _mm_mul_ps(values, v4.values);
+		return _mm_mul_ps(_mm_set_ps(w, z, y, x), _mm_set_ps(v4.w, v4.z, v4.y, v4.x));
 	}
 	Vector4 operator/(const Vector4& v4) const
 	{
-		return _mm_div_ps(values, v4.values);
+		return _mm_div_ps(_mm_set_ps(w, z, y, x), _mm_set_ps(v4.w, v4.z, v4.y, v4.x));
 	}
 
 	float length2() const { return pow(x, 2.0f) + pow(y, 2.0f) + pow(z, 2.0f) + pow(w, 2.0f); }
@@ -91,8 +100,14 @@ public:
 	float dot(const Vector4& v) const
 	{
 		float vf;
-		_MM_EXTRACT_FLOAT(vf, _mm_dp_ps(values, v.values, 0xff), 0);
+		_MM_EXTRACT_FLOAT(vf, _mm_dp_ps(_mm_set_ps(w, z, y, x), _mm_set_ps(v.w, v.z, v.y, v.x), 0xff), 0);
 		return vf;
+	}
+	Vector4 cross3(const Vector4& v) const
+	{
+		// x, y, zÇÃÇ›Ç≈ÉNÉçÉXêœ(wÇÕïœâªÇµÇ»Ç¢)
+		// yz-zy, zx-xz, xy-yx, w
+		return Vector4(y * v.z - z * v.y, z * v.x - x * v.z, x * v.y - y * v.x, w);
 	}
 	Vector4 normalize() const
 	{

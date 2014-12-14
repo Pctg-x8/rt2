@@ -39,26 +39,25 @@ public:
 		// ||P_r + Vt|| = r
 		// dot(P_r + Vt, P_r + Vt) = r^2
 		// |P_r|^2 + 2dot(P_r, V)t + |V|^2 * t^2 - r^2 = 0
-		// A=|V|^2, B=2dot(P_r, V), C = |P_r|^2 - r^2‚Æ‚µ‚Ä
+		// |V|^2=1‚È‚Ì‚ÅAB=2dot(P_r, V), C = |P_r|^2 - r^2‚Æ‚µ‚Ä
 		// ‚QŽŸ•û’öŽ®‚Ìˆê”ÊŒ`‚É‚·‚é‚Æ
-		// At^2 + Bt + C = 0
-		// ‚æ‚Á‚Ä d = B^2 - 4 * A * C
-		// t = (-B+sqrt(d))/2*A, (-B-sqrt(d))/2*A
+		// t^2 + Bt + C = 0
+		// ‚æ‚Á‚Ä d = B^2 - 4 * C
+		// t = (-B+sqrt(d))/2, (-B-sqrt(d))/2
 		auto P_r = r.getStartPos() - this->getPos();
-		auto A = r.getDirection().length2();
 		auto B = 2 * P_r.dot(r.getDirection());
 		auto C = P_r.length2() - pow(radius, 2.0f);
-		auto d = pow(B, 2.0f) - 4.0f * A * C;
+		auto d = pow(B, 2.0f) - 4.0f * C;
 		if (d < 0) return hitTestResult{ false, 0.0, Vector4() };
 		if (d == 0)
 		{
-			auto t = -B / (2.0 * A);
+			auto t = -B / 2.0;
 			return hitTestResult{ t >= 0, t, (r.Pos(t) - getPos()).normalize() };
 		}
 		else
 		{
-			auto t_pos = (-B + sqrt(d)) / (2.0 * A);
-			auto t_neg = (-B - sqrt(d)) / (2.0 * A);
+			auto t_pos = (-B + sqrt(d)) / 2.0;
+			auto t_neg = (-B - sqrt(d)) / 2.0;
 			if (t_pos < 0 && t_neg < 0) return hitTestResult{ false, 0.0, Vector4() };
 			else if (t_neg < t_pos) return hitTestResult{ true, t_neg, (r.Pos(t_neg) - getPos()).normalize() };
 			else return hitTestResult{ true, t_pos, (r.Pos(t_pos) - getPos()).normalize() };
